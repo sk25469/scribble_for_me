@@ -83,7 +83,7 @@ func main() {
 			info.X = p[0]
 			info.Y = p[1]
 
-			// then sends the message to all others
+			// then sends the message to all others laouda
 			mrouter.BroadcastOthers([]byte("set "+info.ID+" "+info.X+" "+info.Y), s)
 			fmt.Println(info)
 		}
