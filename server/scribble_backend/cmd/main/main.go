@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -30,12 +32,14 @@ func main() {
 	mrouter.HandleConnect(func(s *melody.Session) {
 		// ss contains all the sessions
 		ss, _ := mrouter.Sessions()
+		siz := len(ss)
 
 		// whenever a new session joins, we want to show the current
 		// progress of all the sessions which happened earlier into the
 		// current session, it basically is like
 		// lets say we have a chat screen, and when a new user comes
 		// they can see all the messages which happened till it joined
+
 		for _, o := range ss {
 
 			// we are taking the "info" from all the sessions
@@ -56,7 +60,18 @@ func main() {
 		s.Set("info", &model.PointInfo{ID: id, X: "0", Y: "0"})
 
 		// write send the message to the client
-		s.Write([]byte("iam " + id))
+		fmt.Println("writing in current client")
+		err := s.Write([]byte("iam " + id + " " + strconv.Itoa(siz)))
+		if err != nil {
+			log.Fatal(err)
+		}
+		// time.Sleep(3 * time.Second)
+		fmt.Println("broadcasting everywhere")
+		// ss, _ = mrouter.Sessions()
+		// for _, o := range ss {
+		// 	o.Write([]byte("total " + strconv.Itoa(siz)))
+		// }
+		mrouter.BroadcastOthers([]byte("total "+strconv.Itoa(siz)), s)
 	})
 
 	// when a session disconnects, we get the info of current session
@@ -64,7 +79,10 @@ func main() {
 	// this client has been disconnected
 	mrouter.HandleDisconnect(func(s *melody.Session) {
 		info := s.MustGet("info").(*model.PointInfo)
-		mrouter.BroadcastOthers([]byte("dis "+info.ID), s)
+		ss, _ := mrouter.Sessions()
+		siz := len(ss) - 1
+		mrouter.BroadcastOthers([]byte("dis "+info.ID+" "+strconv.Itoa(siz)), s)
+
 	})
 
 	// every time the client sends some new message,
@@ -83,7 +101,7 @@ func main() {
 			info.X = p[0]
 			info.Y = p[1]
 
-			// then sends the message to all others laouda
+			// then sends the message to all others
 			mrouter.BroadcastOthers([]byte("set "+info.ID+" "+info.X+" "+info.Y), s)
 			fmt.Println(info)
 		}

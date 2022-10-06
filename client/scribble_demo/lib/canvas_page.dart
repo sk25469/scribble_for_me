@@ -19,6 +19,7 @@ class _CanvasPageState extends State<CanvasPage> {
   );
 
   late Stream<dynamic> readableStream;
+  String joined = "";
 
   // void _onTapHandler(TapDownDetails details) {
   //   Offset tapPosition;
@@ -102,24 +103,31 @@ class _CanvasPageState extends State<CanvasPage> {
           StreamBuilder(
             stream: readableStream,
             builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text(snapshot.error.toString());
-              }
-
               if (snapshot.hasData) {
                 print(snapshot.data);
+                print(id);
                 final values = snapshot.data.toString().split(" ");
-                if (values[0] == "set") {
-                  return Text(
-                      "CurrentId: $id\nID: ${values[1]}\ndx: ${values[2]}\ndy: ${values[3]}");
-                }
-
                 if (values[0] == "iam") {
                   id = values[1];
+                  joined = values[2];
+                  return Text("New user joined: $id\nTotal joined: $joined");
+                } else if (values[0] == "total") {
+                  joined = values[1];
+                  return Text("New user joined\nTotal joined: $joined");
+                }
+
+                if (values[0] == "set") {
+                  return Text(
+                      "CurrentId: $id\nID: ${values[1]}\ndx: ${values[2]}\ndy: ${values[3]}\nTotal joined: $joined");
+                }
+
+                if (values[0] == "dis") {
+                  joined = values[2];
+                  return Text("User disconnected: ${values[1]}\nTotal joined: $joined");
                 }
               }
 
-              return const Text("Other kind of request");
+              return Text(snapshot.error.toString());
             },
           ),
         ],
