@@ -1,15 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/olahol/melody"
 	"github.com/sk25469/scribble_backend/pkg/model"
+	"github.com/sk25469/scribble_backend/pkg/utils"
 )
 
 func main() {
@@ -24,6 +25,10 @@ func main() {
 
 	// the websocket server which connects by /ws,
 	// it handles all the client requests and broadcasts it
+
+	var connectedClients []string
+	var response *model.ClientServerResponse
+
 	router.GET("/ws", func(c *gin.Context) {
 		mrouter.HandleRequest(c.Writer, c.Request)
 	})
@@ -32,7 +37,7 @@ func main() {
 	mrouter.HandleConnect(func(s *melody.Session) {
 		// ss contains all the sessions
 		ss, _ := mrouter.Sessions()
-		siz := len(ss) + 1
+		log.Printf("%v\n", connectedClients)
 
 		// whenever a new session joins, we want to show the current
 		// progress of all the sessions which happened earlier into the
@@ -47,7 +52,15 @@ func main() {
 
 			// and we are rendering the gophers based on all the x and y
 			// coordinates of other connected sessions
-			s.Write([]byte("set " + info.ID + " " + info.X + " " + info.Y))
+			response.ResponseType = "set"
+			response.ID = info.ID
+			response.PointInfo = &model.PointInfo{ID: info.ID, X: info.X, Y: info.Y}
+
+			jsonResponse, err := json.Marshal(&response)
+			if err != nil {
+				log.Print("can't marshall reponse")
+			}
+			s.Write([]byte(jsonResponse))
 		}
 
 		// now the new session is assigned a new id
@@ -57,18 +70,32 @@ func main() {
 		// in the main server
 
 		// Set "stores" the key, value pair for this session in the server
-		s.Set("info", &model.PointInfo{ID: id, X: "0", Y: "0"})
+		pointInfo := model.PointInfo{ID: id, X: "0", Y: "0"}
+		s.Set("info", &pointInfo)
 
 		// write send the message to the client to set its id, and the size of the
+		// fmt.Printf("after sending client %v\n", connectedClients)
+		connectedClients = append(connectedClients, id)
 		// current connected sessions
-		err := s.Write([]byte("iam " + id + " " + strconv.Itoa(siz)))
+		response = &model.ClientServerResponse{ResponseType: "iam", ID: id, ConnectedClients: connectedClients, PointInfo: &pointInfo}
+		jsonResponse, err := json.Marshal(&response)
+		if err != nil {
+			log.Print("can't marshall reponse")
+		}
+
+		err = s.Write([]byte(jsonResponse))
+
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		response.ResponseType = "total"
+		jsonResponse, err = json.Marshal(&response)
+		if err != nil {
+			log.Print("can't marshall reponse")
+		}
 		// broadcasts others the new total no. of sessions
 		// with the id of the new joined client
-		err = mrouter.BroadcastOthers([]byte("total "+strconv.Itoa(siz)+" "+id), s)
+		err = mrouter.BroadcastOthers([]byte(jsonResponse), s)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -79,10 +106,20 @@ func main() {
 	// this client has been disconnected
 	mrouter.HandleDisconnect(func(s *melody.Session) {
 		info := s.MustGet("info").(*model.PointInfo)
-		ss, _ := mrouter.Sessions()
-		siz := len(ss)
-		fmt.Printf("size before broadcasting %v\n", siz)
-		mrouter.BroadcastOthers([]byte("dis "+info.ID+" "+strconv.Itoa(siz)), s)
+		var err error
+		connectedClients, err = utils.Remove(connectedClients, info.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		response.ConnectedClients = connectedClients
+		response.ID = info.ID
+		response.ResponseType = "dis"
+		jsonResponse, err := json.Marshal(&response)
+		if err != nil {
+			log.Print("can't marshall reponse")
+		}
+		fmt.Printf("size before broadcasting %v\n", len(connectedClients))
+		mrouter.BroadcastOthers([]byte(jsonResponse), s)
 
 	})
 
@@ -101,9 +138,17 @@ func main() {
 			// every time there is some new activity on the client
 			info.X = p[0]
 			info.Y = p[1]
+			response.ResponseType = "set"
+			response.ID = info.ID
+			response.PointInfo = &model.PointInfo{ID: info.ID, X: p[0], Y: p[1]}
+
+			jsonResponse, err := json.Marshal(&response)
+			if err != nil {
+				log.Print("can't marshall reponse")
+			}
 
 			// then sends the message to all others
-			mrouter.BroadcastOthers([]byte("set "+info.ID+" "+info.X+" "+info.Y), s)
+			mrouter.BroadcastOthers([]byte(jsonResponse), s)
 			fmt.Println(info)
 		}
 	})
