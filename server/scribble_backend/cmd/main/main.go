@@ -59,19 +59,19 @@ func main() {
 		// Set "stores" the key, value pair for this session in the server
 		s.Set("info", &model.PointInfo{ID: id, X: "0", Y: "0"})
 
-		// write send the message to the client
-		fmt.Println("writing in current client")
+		// write send the message to the client to set its id, and the size of the
+		// current connected sessions
 		err := s.Write([]byte("iam " + id + " " + strconv.Itoa(siz)))
 		if err != nil {
 			log.Fatal(err)
 		}
-		// time.Sleep(3 * time.Second)
-		fmt.Println("broadcasting everywhere")
-		// ss, _ = mrouter.Sessions()
-		// for _, o := range ss {
-		// 	o.Write([]byte("total " + strconv.Itoa(siz)))
-		// }
-		mrouter.BroadcastOthers([]byte("total "+strconv.Itoa(siz)), s)
+
+		// broadcasts others the new total no. of sessions
+		// with the id of the new joined client
+		err = mrouter.BroadcastOthers([]byte("total "+strconv.Itoa(siz)+" "+id), s)
+		if err != nil {
+			log.Fatal(err)
+		}
 	})
 
 	// when a session disconnects, we get the info of current session
