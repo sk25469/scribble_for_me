@@ -32,7 +32,7 @@ func main() {
 	mrouter.HandleConnect(func(s *melody.Session) {
 		// ss contains all the sessions
 		ss, _ := mrouter.Sessions()
-		siz := len(ss)
+		siz := len(ss) + 1
 
 		// whenever a new session joins, we want to show the current
 		// progress of all the sessions which happened earlier into the
@@ -80,7 +80,8 @@ func main() {
 	mrouter.HandleDisconnect(func(s *melody.Session) {
 		info := s.MustGet("info").(*model.PointInfo)
 		ss, _ := mrouter.Sessions()
-		siz := len(ss) - 1
+		siz := len(ss)
+		fmt.Printf("size before broadcasting %v\n", siz)
 		mrouter.BroadcastOthers([]byte("dis "+info.ID+" "+strconv.Itoa(siz)), s)
 
 	})

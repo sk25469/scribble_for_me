@@ -113,7 +113,7 @@ class _CanvasPageState extends State<CanvasPage> {
                   return Text("New user joined: $id\nTotal joined: $joined");
                 } else if (values[0] == "total") {
                   joined = values[1];
-                  return Text("New user joined\nTotal joined: $joined");
+                  return Text("New user joined: ${values[2]}\nTotal joined: $joined");
                 }
 
                 if (values[0] == "set") {
