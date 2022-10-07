@@ -12,23 +12,13 @@ class CanvasPage extends StatefulWidget {
 }
 
 class _CanvasPageState extends State<CanvasPage> {
-  String id = "";
+  String id = "", joined = "";
 
   final channel = WebSocketChannel.connect(
     Uri.parse("ws://localhost:5000/ws"),
   );
 
   late Stream<dynamic> readableStream;
-  String joined = "";
-
-  // void _onTapHandler(TapDownDetails details) {
-  //   Offset tapPosition;
-  //   RenderBox? referenceBox = context.findRenderObject() as RenderBox;
-  //   setState(() {
-  //     tapPosition = referenceBox.globalToLocal(details.globalPosition);
-  //     infoBroadcastController.add("${tapPosition.dx} ${tapPosition.dy}");
-  //   });
-  // }
 
   void onPanStart(DragStartDetails details) {
     RenderBox? box = context.findRenderObject() as RenderBox;
@@ -69,19 +59,20 @@ class _CanvasPageState extends State<CanvasPage> {
   @override
   void initState() {
     readableStream = channel.stream.asBroadcastStream();
-    // setClientDetails();
     super.initState();
   }
 
   @override
   void dispose() {
     channel.sink.close();
-    // infoBroadcastController.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scribble Demo'),
@@ -90,45 +81,99 @@ class _CanvasPageState extends State<CanvasPage> {
       ),
       body: Column(
         children: [
-          Container(
-            width: 200,
-            height: 200,
-            color: Colors.red,
-            child: GestureDetector(
-              onPanStart: onPanStart,
-              onPanEnd: onPanEnd,
-              onPanUpdate: onPanUpdate,
-            ),
-          ),
-          StreamBuilder(
-            stream: readableStream,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                print(snapshot.data);
-                print(id);
-                final values = snapshot.data.toString().split(" ");
-                if (values[0] == "iam") {
-                  id = values[1];
-                  joined = values[2];
-                  return Text("New user joined: $id\nTotal joined: $joined");
-                } else if (values[0] == "total") {
-                  joined = values[1];
-                  return Text("New user joined\nTotal joined: $joined");
-                }
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              SizedBox(
+                width: width * 0.2,
+                height: height * 0.8,
+                child: Column(
+                  children: [
+                    const Text(
+                      "Connected User",
+                      style: TextStyle(fontSize: 30),
+                    ),
+                    // Expanded(
+                    //   child: ListView.builder(
+                    //     itemBuilder: (context, index) => Text("User $index"),
+                    //     itemCount: 3,
+                    //   ),
+                    // ),
+                    StreamBuilder(
+                      stream: readableStream,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          print(snapshot.data);
+                          print(id);
+                          final values = snapshot.data.toString().split(" ");
+                          if (values[0] == "iam") {
+                            id = values[1];
+                            joined = values[2];
+                            return Text("New user joined: $id\nTotal joined: $joined");
+                          } else if (values[0] == "total") {
+                            joined = values[1];
+                            return Text(
+                                "New user joined: ${values[2]}\nTotal joined: $joined");
+                          } else if (values[0] == "dis") {
+                            joined = values[2];
+                            return Text(
+                                "User disconnected: ${values[1]}\nTotal joined: $joined");
+                          }
+                        }
+                        return Text("Total joined: $joined");
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: width * 0.6,
+                height: height * 0.8,
+                color: const Color.fromARGB(255, 240, 240, 145),
+                child: GestureDetector(
+                  onPanStart: onPanStart,
+                  onPanEnd: onPanEnd,
+                  onPanUpdate: onPanUpdate,
+                ),
+              ),
+              SizedBox(
+                width: width * 0.2,
+                height: height * 0.8,
+                child: StreamBuilder(
+                  stream: readableStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      print(snapshot.data);
+                      print(id);
+                      final values = snapshot.data.toString().split(" ");
+                      // if (values[0] == "iam") {
+                      //   id = values[1];
+                      //   joined = values[2];
+                      //   return Text("New user joined: $id\nTotal joined: $joined");
+                      // } else if (values[0] == "total") {
+                      //   joined = values[1];
+                      //   return Text(
+                      //       "New user joined: ${values[2]}\nTotal joined: $joined");
+                      // }
 
-                if (values[0] == "set") {
-                  return Text(
-                      "CurrentId: $id\nID: ${values[1]}\ndx: ${values[2]}\ndy: ${values[3]}\nTotal joined: $joined");
-                }
+                      if (values[0] == "set") {
+                        return Text(
+                            "CurrentId: $id\nID: ${values[1]}\ndx: ${values[2]}\ndy: ${values[3]}");
+                      }
 
-                if (values[0] == "dis") {
-                  joined = values[2];
-                  return Text("User disconnected: ${values[1]}\nTotal joined: $joined");
-                }
-              }
+                      // if (values[0] == "dis") {
+                      //   joined = values[2];
+                      //   return Text(
+                      //       "User disconnected: ${values[1]}\nTotal joined: $joined");
+                      // }
+                    }
 
-              return Text(snapshot.error.toString());
-            },
+                    return Text(snapshot.error.toString());
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
