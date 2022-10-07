@@ -1,5 +1,7 @@
 package model
 
 type PointInfo struct {
-	ID, X, Y string
+	ID string `json:"id"`
+	X  string `json:"x"`
+	Y  string `json:"y"`
 }
