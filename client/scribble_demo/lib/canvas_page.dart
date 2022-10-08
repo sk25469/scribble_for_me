@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:scribble_demo/model/server_response.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class CanvasPage extends StatefulWidget {
@@ -18,7 +19,8 @@ class _CanvasPageState extends State<CanvasPage> {
     Uri.parse("ws://localhost:5000/ws"),
   );
 
-  late Stream<dynamic> readableStream;
+  late Stream<ServerResponse> readableStream;
+  // late StreamController<ServerResponse> streamController;
 
   void onPanStart(DragStartDetails details) {
     RenderBox? box = context.findRenderObject() as RenderBox;
@@ -58,7 +60,11 @@ class _CanvasPageState extends State<CanvasPage> {
 
   @override
   void initState() {
-    readableStream = channel.stream.asBroadcastStream();
+    readableStream = channel.stream.map((event) {
+      String value = event.toString();
+      return ServerResponse.fromJson(value);
+    }).asBroadcastStream();
+    log("converted dynamic to ServerResponse");
     super.initState();
   }
 
@@ -94,31 +100,24 @@ class _CanvasPageState extends State<CanvasPage> {
                       "Connected User",
                       style: TextStyle(fontSize: 30),
                     ),
-                    // Expanded(
-                    //   child: ListView.builder(
-                    //     itemBuilder: (context, index) => Text("User $index"),
-                    //     itemCount: 3,
-                    //   ),
-                    // ),
-                    StreamBuilder(
+                    StreamBuilder<ServerResponse>(
                       stream: readableStream,
                       builder: (context, snapshot) {
                         if (snapshot.hasData) {
                           print(snapshot.data);
-                          print(id);
-                          final values = snapshot.data.toString().split(" ");
-                          if (values[0] == "iam") {
-                            id = values[1];
-                            joined = values[2];
+                          final responseData = snapshot.data;
+                          if (responseData!.response_type == "iam") {
+                            id = responseData.id;
+                            joined = responseData.connected_clients.length.toString();
                             return Text("New user joined: $id\nTotal joined: $joined");
-                          } else if (values[0] == "total") {
-                            joined = values[1];
+                          } else if (responseData.response_type == "total") {
+                            joined = responseData.connected_clients.length.toString();
                             return Text(
-                                "New user joined: ${values[2]}\nTotal joined: $joined");
-                          } else if (values[0] == "dis") {
-                            joined = values[2];
+                                "New user joined: ${responseData.id}\nTotal joined: $joined");
+                          } else if (responseData.response_type == "dis") {
+                            joined = responseData.connected_clients.length.toString();
                             return Text(
-                                "User disconnected: ${values[1]}\nTotal joined: $joined");
+                                "User disconnected: ${responseData.id}\nTotal joined: $joined");
                           }
                         }
                         return Text("Total joined: $joined");
@@ -140,36 +139,23 @@ class _CanvasPageState extends State<CanvasPage> {
               SizedBox(
                 width: width * 0.2,
                 height: height * 0.8,
-                child: StreamBuilder(
+                child: StreamBuilder<ServerResponse>(
                   stream: readableStream,
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text("An error occured");
+                    }
                     if (snapshot.hasData) {
                       print(snapshot.data);
-                      print(id);
-                      final values = snapshot.data.toString().split(" ");
-                      // if (values[0] == "iam") {
-                      //   id = values[1];
-                      //   joined = values[2];
-                      //   return Text("New user joined: $id\nTotal joined: $joined");
-                      // } else if (values[0] == "total") {
-                      //   joined = values[1];
-                      //   return Text(
-                      //       "New user joined: ${values[2]}\nTotal joined: $joined");
-                      // }
+                      final responseData = snapshot.data;
 
-                      if (values[0] == "set") {
+                      if (responseData!.response_type == "set") {
                         return Text(
-                            "CurrentId: $id\nID: ${values[1]}\ndx: ${values[2]}\ndy: ${values[3]}");
+                            "CurrentClientID: $id\nID: ${responseData.point_info.id}\ndx: ${responseData.point_info.x}\ndy: ${responseData.point_info.y}");
                       }
-
-                      // if (values[0] == "dis") {
-                      //   joined = values[2];
-                      //   return Text(
-                      //       "User disconnected: ${values[1]}\nTotal joined: $joined");
-                      // }
                     }
 
-                    return Text(snapshot.error.toString());
+                    return const Text("No movement");
                   },
                 ),
               ),
