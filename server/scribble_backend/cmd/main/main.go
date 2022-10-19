@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,9 +20,9 @@ func main() {
 
 	// the base URL at which the client has to connect
 	// renders the index.html page
-	// router.GET("/", func(c *gin.Context) {
-	// 	http.ServeFile(c.Writer, c.Request, "index.html")
-	// })
+	router.GET("/", func(c *gin.Context) {
+		http.ServeFile(c.Writer, c.Request, "./static/index.html")
+	})
 
 	// the websocket server which connects by /ws,
 	// it handles all the client requests and broadcasts it
