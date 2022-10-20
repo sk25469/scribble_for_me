@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/olahol/melody"
@@ -16,8 +15,9 @@ import (
 var connectedClients []string
 var mrouter = config.GetWebSocketRouter()
 var response *model.ServerResponse
+var rooms map[string]*model.Room
 
-// TYPES OF REQUEST
+// TYPES OF REQUEST SENT BY SERVER
 //
 //  1. "new" : A new client joins the network, but is not currently in any room
 //
@@ -28,7 +28,6 @@ var response *model.ServerResponse
 //  4. "set" : When a client is drawing, it will send its x,y co-ordinate to others in the room
 //
 //  5. "dis" : Informs others in the room that "id" has disconnected
-
 func OnConnect(s *melody.Session) {
 
 	// now the new session is assigned a new id
@@ -89,27 +88,48 @@ func OnDisconnect(s *melody.Session) {
 
 }
 
+// TYPES OF REQUEST SENT BY CLIENT
+//
+//  1. "connect-new" : When a client has entered its name and the type of room it wants to join is a new room
+//
+//  2. "connect" : Client wants to connect to an existing room with ID
+//
+//  3. "move" : A client is drawing on the screen
 func OnMessage(s *melody.Session, msg []byte) {
-	p := strings.Split(string(msg), " ")
-	if len(p) == 2 {
-		// we get the info of the current session from the server
-		info := s.MustGet("info").(*model.ClientInfo)
-
-		// we assign the x and y coordinates to it,
-		// every time there is some new activity on the client
-		info.X = p[0]
-		info.Y = p[1]
-		response.ResponseType = "set"
-		response.ID = info.ClientID
-		response.ClientInfo = &model.ClientInfo{ClientID: info.ClientID, X: p[0], Y: p[1]}
-
-		jsonResponse, err := json.Marshal(&response)
-		if err != nil {
-			log.Print("can't marshall reponse")
-		}
-
-		// then sends the message to all others
-		mrouter.BroadcastOthers([]byte(jsonResponse), s)
-		fmt.Println(info)
+	var clientResponse *model.ClientResponse
+	err := json.Unmarshal(msg, &clientResponse)
+	if err != nil {
+		log.Fatal(err)
 	}
+	if clientResponse.ReponseType == "connect-new" {
+		info := s.MustGet("info").(*model.ClientInfo)
+		clientID := info.ClientID
+		clientName := clientResponse.ClientInfo.Name
+		newRoomID := utils.GetKey()
+		s.Set("info", &model.ClientInfo{RoomID: newRoomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
+		grp1, grp2 := utils.InsertClientInRoom(rooms[newRoomID].Group1, rooms[newRoomID].Group2, clientID)
+		rooms[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
+
+	}
+	// if len(p) == 2 {
+	// 	// we get the info of the current session from the server
+	// 	info := s.MustGet("info").(*model.ClientInfo)
+
+	// 	// we assign the x and y coordinates to it,
+	// 	// every time there is some new activity on the client
+	// 	info.X = p[0]
+	// 	info.Y = p[1]
+	// 	response.ResponseType = "set"
+	// 	response.ID = info.ClientID
+	// 	response.ClientInfo = &model.ClientInfo{ClientID: info.ClientID, X: p[0], Y: p[1]}
+
+	// 	jsonResponse, err := json.Marshal(&response)
+	// 	if err != nil {
+	// 		log.Print("can't marshall reponse")
+	// 	}
+
+	// 	// then sends the message to all others
+	// 	mrouter.BroadcastOthers([]byte(jsonResponse), s)
+	// 	fmt.Println(info)
+	// }
 }
