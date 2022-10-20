@@ -46,6 +46,7 @@ func main() {
 		// lets say we have a chat screen, and when a new user comes
 		// they can see all the messages which happened till it joined
 
+		// TODO: Create a list of all points which happened till now and render to the currently joining client
 		for _, o := range ss {
 
 			// we are taking the "info" from all the sessions
