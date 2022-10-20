@@ -21,14 +21,14 @@ func main() {
 	// the base URL at which the client has to connect
 	// renders the index.html page
 	router.GET("/", func(c *gin.Context) {
-		http.ServeFile(c.Writer, c.Request, "./static/index.html")
+		http.ServeFile(c.Writer, c.Request, "../../static/index.html")
 	})
 
 	// the websocket server which connects by /ws,
 	// it handles all the client requests and broadcasts it
 
 	var connectedClients []string
-	var response *model.ClientServerResponse
+	var response *model.InteractionModel
 
 	router.GET("/ws", func(c *gin.Context) {
 		mrouter.HandleRequest(c.Writer, c.Request)
@@ -37,7 +37,7 @@ func main() {
 	// every time a new session arrives, this method is triggered
 	mrouter.HandleConnect(func(s *melody.Session) {
 		// ss contains all the sessions
-		ss, _ := mrouter.Sessions()
+		// ss, _ := mrouter.Sessions()
 		log.Printf("%v\n", connectedClients)
 
 		// whenever a new session joins, we want to show the current
@@ -47,23 +47,23 @@ func main() {
 		// they can see all the messages which happened till it joined
 
 		// TODO: Create a list of all points which happened till now and render to the currently joining client
-		for _, o := range ss {
+		// for _, o := range ss {
 
-			// we are taking the "info" from all the sessions
-			info := o.MustGet("info").(*model.PointInfo)
+		// 	// we are taking the "info" from all the sessions
+		// 	info := o.MustGet("info").(*model.PointInfo)
 
-			// and we are rendering the gophers based on all the x and y
-			// coordinates of other connected sessions
-			response.ResponseType = "set"
-			response.ID = info.ID
-			response.PointInfo = &model.PointInfo{ID: info.ID, X: info.X, Y: info.Y}
+		// 	// and we are rendering the gophers based on all the x and y
+		// 	// coordinates of other connected sessions
+		// 	response.ResponseType = "set"
+		// 	response.ID = info.ID
+		// 	response.PointInfo = &model.PointInfo{ID: info.ID, X: info.X, Y: info.Y}
 
-			jsonResponse, err := json.Marshal(&response)
-			if err != nil {
-				log.Print("can't marshall reponse")
-			}
-			s.Write([]byte(jsonResponse))
-		}
+		// 	jsonResponse, err := json.Marshal(&response)
+		// 	if err != nil {
+		// 		log.Print("can't marshall reponse")
+		// 	}
+		// 	s.Write([]byte(jsonResponse))
+		// }
 
 		// now the new session is assigned a new id
 		id := uuid.NewString()
@@ -72,14 +72,14 @@ func main() {
 		// in the main server
 
 		// Set "stores" the key, value pair for this session in the server
-		pointInfo := model.PointInfo{ID: id, X: "0", Y: "0"}
+		pointInfo := model.ClientInfo{ClientID: id, X: "0", Y: "0"}
 		s.Set("info", &pointInfo)
 
 		// write send the message to the client to set its id, and the size of the
 		// fmt.Printf("after sending client %v\n", connectedClients)
 		connectedClients = append(connectedClients, id)
 		// current connected sessions
-		response = &model.ClientServerResponse{ResponseType: "iam", ID: id, ConnectedClients: connectedClients, PointInfo: &pointInfo}
+		response = &model.InteractionModel{ResponseType: "iam", ID: id, ConnectedClients: connectedClients, ClientInfo: &pointInfo}
 		jsonResponse, err := json.Marshal(&response)
 		if err != nil {
 			log.Print("can't marshall reponse")
@@ -107,14 +107,14 @@ func main() {
 	// from the server, and then broadcasts to other session that
 	// this client has been disconnected
 	mrouter.HandleDisconnect(func(s *melody.Session) {
-		info := s.MustGet("info").(*model.PointInfo)
+		info := s.MustGet("info").(*model.ClientInfo)
 		var err error
-		connectedClients, err = utils.Remove(connectedClients, info.ID)
+		connectedClients, err = utils.Remove(connectedClients, info.ClientID)
 		if err != nil {
 			log.Fatal(err)
 		}
 		response.ConnectedClients = connectedClients
-		response.ID = info.ID
+		response.ID = info.ClientID
 		response.ResponseType = "dis"
 		jsonResponse, err := json.Marshal(&response)
 		if err != nil {
@@ -134,15 +134,15 @@ func main() {
 		p := strings.Split(string(msg), " ")
 		if len(p) == 2 {
 			// we get the info of the current session from the server
-			info := s.MustGet("info").(*model.PointInfo)
+			info := s.MustGet("info").(*model.ClientInfo)
 
 			// we assign the x and y coordinates to it,
 			// every time there is some new activity on the client
 			info.X = p[0]
 			info.Y = p[1]
 			response.ResponseType = "set"
-			response.ID = info.ID
-			response.PointInfo = &model.PointInfo{ID: info.ID, X: p[0], Y: p[1]}
+			response.ID = info.ClientID
+			response.ClientInfo = &model.ClientInfo{ClientID: info.ClientID, X: p[0], Y: p[1]}
 
 			jsonResponse, err := json.Marshal(&response)
 			if err != nil {

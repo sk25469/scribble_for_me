@@ -16,7 +16,7 @@ class _CanvasPageState extends State<CanvasPage> {
   String id = "", joined = "";
 
   final channel = WebSocketChannel.connect(
-    Uri.parse("ws://20.244.56.148:8080/ws"),
+    Uri.parse("ws://localhost:5000/ws"),
   );
 
   late Stream<ServerResponse> readableStream;
