@@ -105,7 +105,12 @@ func OnMessage(s *melody.Session, msg []byte) {
 		info := s.MustGet("info").(*model.ClientInfo)
 		clientID := info.ClientID
 		clientName := clientResponse.ClientInfo.Name
-		newRoomID := utils.GetKey()
+		var newRoomID string
+		if clientResponse.RoomType == "private" {
+			newRoomID = utils.GetKey()
+		} else {
+			newRoomID = "public"
+		}
 		s.Set("info", &model.ClientInfo{RoomID: newRoomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
 		grp1, grp2 := utils.InsertClientInRoom(rooms[newRoomID].Group1, rooms[newRoomID].Group2, clientID)
 		rooms[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
