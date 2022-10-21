@@ -1,6 +1,8 @@
 package utils
 
 //	Insert a new id so that there are equal no. of user in each group
+//
+//	returns both groups, and the index of group in which id has been assigned
 func InsertClientInRoom(grp1 []string, grp2 []string, id string) ([]string, []string) {
 	if len(grp1) > len(grp2) {
 		grp2 = append(grp2, id)

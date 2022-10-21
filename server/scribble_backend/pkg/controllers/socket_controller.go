@@ -17,6 +17,9 @@ var mrouter = config.GetWebSocketRouter()
 var response *model.ServerResponse
 var rooms map[string]*model.Room
 
+// 1st key is roomID, 2nd key is clientID and value is session
+var totalClientsInSession map[string](map[string]*melody.Session)
+
 // TYPES OF REQUEST SENT BY SERVER
 //
 //  1. "new" : A new client joins the network, but is not currently in any room
@@ -56,17 +59,7 @@ func OnConnect(s *melody.Session) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// response.ResponseType = "total"
-	// jsonResponse, err = json.Marshal(&response)
-	// if err != nil {
-	// 	log.Print("can't marshall reponse")
-	// }
-	// broadcasts others the new total no. of sessions
-	// with the id of the new joined client
-	// err = mrouter.BroadcastOthers([]byte(jsonResponse), s)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+
 }
 
 func OnDisconnect(s *melody.Session) {
@@ -90,7 +83,7 @@ func OnDisconnect(s *melody.Session) {
 
 // TYPES OF REQUEST SENT BY CLIENT
 //
-//  1. "connect-new" : When a client has entered its name and the type of room it wants to join is a new room
+//  1. "connect-new" : When a client has entered its name and he wants to join a new room
 //
 //  2. "connect" : Client wants to connect to an existing room with ID
 //
@@ -101,19 +94,40 @@ func OnMessage(s *melody.Session, msg []byte) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	info := s.MustGet("info").(*model.ClientInfo)
+	clientID := info.ClientID
+	clientName := clientResponse.ClientInfo.Name
 	if clientResponse.ReponseType == "connect-new" {
-		info := s.MustGet("info").(*model.ClientInfo)
-		clientID := info.ClientID
-		clientName := clientResponse.ClientInfo.Name
 		var newRoomID string
+
+		// if he wants to create a private room, a new key for room is created
+		// otherwise it is assigned as "public"
 		if clientResponse.RoomType == "private" {
 			newRoomID = utils.GetKey()
 		} else {
 			newRoomID = "public"
 		}
+		// update the info of the current session with its roomID and user name
 		s.Set("info", &model.ClientInfo{RoomID: newRoomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
+
 		grp1, grp2 := utils.InsertClientInRoom(rooms[newRoomID].Group1, rooms[newRoomID].Group2, clientID)
 		rooms[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
+
+		// mapping the clientID with the sessions
+		totalClientsInSession[newRoomID][clientID] = s
+	} else {
+		// check if the roomID exists
+		roomID := clientResponse.RoomID
+		if _, ok := rooms[roomID]; !ok {
+			log.Fatal("given room doesn't exists")
+		}
+		s.Set("info", &model.ClientInfo{RoomID: roomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
+
+		grp1, grp2 := utils.InsertClientInRoom(rooms[roomID].Group1, rooms[roomID].Group2, clientID)
+		rooms[roomID] = &model.Room{RoomID: roomID, Group1: grp1, Group2: grp2}
+		totalClientsInSession[roomID][clientID] = s
+
+		//	TODO: Send other clients connected in the room info that a new client has joined
 
 	}
 	// if len(p) == 2 {
@@ -137,4 +151,23 @@ func OnMessage(s *melody.Session, msg []byte) {
 	// 	mrouter.BroadcastOthers([]byte(jsonResponse), s)
 	// 	fmt.Println(info)
 	// }
+}
+
+// sends message in a group, can be in same or another
+func SendMessageInGroup(grp []string, clientInfo *model.ClientInfo) {
+	roomID := clientInfo.RoomID
+	clientID := clientInfo.ClientID
+	for i := 0; i < len(grp); i++ {
+		id := grp[i]
+		session, ok := totalClientsInSession[roomID][id]
+		if !ok {
+			log.Fatal("user is not in the session")
+		}
+		serverResponse := model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: clientInfo}
+		jsonReponse, err := json.Marshal(&serverResponse)
+		if err != nil {
+			log.Fatal("cant parse json response")
+		}
+		session.Write([]byte(jsonReponse))
+	}
 }
