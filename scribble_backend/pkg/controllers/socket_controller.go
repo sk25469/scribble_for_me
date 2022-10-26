@@ -100,8 +100,8 @@ func OnMessage(s *melody.Session, msg []byte) {
 	if clientResponse.ReponseType == "connect-new" {
 		var newRoomID string
 
-		// if he wants to create a private room, a new key for room is created
-		// otherwise it is assigned as "public"
+		//	if he wants to create a private room, a new key for room is created
+		//	otherwise it is assigned as "public"
 		if clientResponse.RoomType == "private" {
 			newRoomID = utils.GetKey()
 		} else {
