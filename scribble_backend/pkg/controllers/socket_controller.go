@@ -15,7 +15,9 @@ import (
 var connectedClients []string
 var mrouter = config.GetWebSocketRouter()
 var response *model.ServerResponse
-var rooms map[string]*model.Room
+var privateRoomsMap map[string]*model.Room
+var publicRoomsBasedPriorityQueue model.PriorityQueue
+var publicRoomsMap map[string]*model.Room
 
 // 1st key is roomID, 2nd key is clientID and value is session
 var totalClientsInSession map[string](map[string]*melody.Session)
@@ -97,39 +99,68 @@ func OnMessage(s *melody.Session, msg []byte) {
 	info := s.MustGet("info").(*model.ClientInfo)
 	clientID := info.ClientID
 	clientName := clientResponse.ClientInfo.Name
+	newClientInfo := model.ClientInfo{ClientID: clientID, Name: clientName}
 	if clientResponse.ReponseType == "connect-new" {
 		var newRoomID string
 
 		//	if he wants to create a private room, a new key for room is created
-		//	otherwise it is assigned as "public"
+
 		if clientResponse.RoomType == "private" {
 			newRoomID = utils.GetKey()
+			grp1, grp2 := utils.InsertClientInRoom(privateRoomsMap[newRoomID].Group1, privateRoomsMap[newRoomID].Group2, clientID)
+			privateRoomsMap[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
 		} else {
-			newRoomID = "public"
+			// If there are no public rooms, create a new room and assign client to it
+			if publicRoomsBasedPriorityQueue.Len() == 0 {
+				newRoomID = utils.GetKey()
+				AddAndUpdatePublicRooms([]string{}, []string{}, clientID, newRoomID)
+
+			} else {
+				topRoom := publicRoomsBasedPriorityQueue.Pop().(*model.Room)
+				newRoomID = topRoom.RoomID
+				totalClients := len(topRoom.Group1) + len(topRoom.Group2)
+				//	max 10 clients can be in a room
+				//	if crosses 10, new room is formed
+				if totalClients == 10 {
+					newRoomID := utils.GetKey()
+					AddAndUpdatePublicRooms([]string{}, []string{}, clientID, newRoomID)
+
+				} else {
+					// update the groups of the current room which has the lowest no. of clients
+					newRoom := AddAndUpdatePublicRooms(topRoom.Group1, topRoom.Group2, clientID, topRoom.RoomID)
+					BroadcastMessageInRoom(newRoom, &newClientInfo)
+				}
+			}
+
 		}
 		// update the info of the current session with its roomID and user name
-		s.Set("info", &model.ClientInfo{RoomID: newRoomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
-
-		grp1, grp2 := utils.InsertClientInRoom(rooms[newRoomID].Group1, rooms[newRoomID].Group2, clientID)
-		rooms[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
+		newClientInfo.RoomID = newRoomID
+		s.Set("info", &newClientInfo)
 
 		// mapping the clientID with the sessions
 		totalClientsInSession[newRoomID][clientID] = s
 	} else {
 		// check if the roomID exists
 		roomID := clientResponse.RoomID
-		if _, ok := rooms[roomID]; !ok {
+		if _, ok := privateRoomsMap[roomID]; !ok {
 			log.Fatal("given room doesn't exists")
 		}
-		s.Set("info", &model.ClientInfo{RoomID: roomID, ClientID: clientID, Name: clientName, X: "0", Y: "0"})
-
-		grp1, grp2 := utils.InsertClientInRoom(rooms[roomID].Group1, rooms[roomID].Group2, clientID)
-		rooms[roomID] = &model.Room{RoomID: roomID, Group1: grp1, Group2: grp2}
+		//	check if the room already has 10 members
+		totalClients := len(privateRoomsMap[roomID].Group1) + len(privateRoomsMap[roomID].Group2)
+		if totalClients == 10 {
+			log.Fatal("max no. of clients reached")
+		}
+		newClientInfo.RoomID = roomID
+		s.Set("info", &newClientInfo)
+		grp1, grp2 := utils.InsertClientInRoom(privateRoomsMap[roomID].Group1, privateRoomsMap[roomID].Group2, clientID)
+		newRoom := model.Room{RoomID: roomID, Group1: grp1, Group2: grp2}
+		privateRoomsMap[roomID] = &newRoom
 		totalClientsInSession[roomID][clientID] = s
-
-		//	TODO: Send other clients connected in the room info that a new client has joined
+		BroadcastMessageInRoom(&newRoom, &newClientInfo)
 
 	}
+
+	// TODO: Create logic for updating points while drawing on screen
 	// if len(p) == 2 {
 	// 	// we get the info of the current session from the server
 	// 	info := s.MustGet("info").(*model.ClientInfo)
@@ -151,6 +182,42 @@ func OnMessage(s *melody.Session, msg []byte) {
 	// 	mrouter.BroadcastOthers([]byte(jsonResponse), s)
 	// 	fmt.Println(info)
 	// }
+}
+
+// updates the groups with equal distribution, inserts the updated room in the priority queue
+// and update the public room in the map
+func AddAndUpdatePublicRooms(group1, group2 []string, clientID, newRoomID string) *model.Room {
+	grp1, grp2 := utils.InsertClientInRoom(group1, group2, clientID)
+	newRoom := model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
+	publicRoomsBasedPriorityQueue.Push(newRoom)
+	// update the mapping for public room
+	publicRoomsMap[newRoomID] = &newRoom
+	return &newRoom
+}
+
+// broadcast message in a room
+func BroadcastMessageInRoom(room *model.Room, clientInfo *model.ClientInfo) {
+	// broadcast in group1
+	clientID := clientInfo.ClientID
+	for _, client := range room.Group1 {
+		session := totalClientsInSession[room.RoomID][client]
+		serverResponse := model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: clientInfo}
+		jsonReponse, err := json.Marshal(&serverResponse)
+		if err != nil {
+			log.Fatal("cant parse json response")
+		}
+		session.Write([]byte(jsonReponse))
+	}
+
+	for _, client := range room.Group2 {
+		session := totalClientsInSession[room.RoomID][client]
+		serverResponse := model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: clientInfo}
+		jsonReponse, err := json.Marshal(&serverResponse)
+		if err != nil {
+			log.Fatal("cant parse json response")
+		}
+		session.Write([]byte(jsonReponse))
+	}
 }
 
 // sends message in a group, can be in same or another
