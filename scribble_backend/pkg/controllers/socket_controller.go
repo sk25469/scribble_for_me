@@ -37,6 +37,7 @@ func OnConnect(s *melody.Session) {
 
 	// now the new session is assigned a new id
 	id := uuid.NewString()
+	fmt.Printf("new client joined %v\n", id)
 
 	// and we set the initial info as the following to the current session
 	// in the main server
@@ -116,7 +117,7 @@ func OnMessage(s *melody.Session, msg []byte) {
 				AddAndUpdatePublicRooms([]string{}, []string{}, clientID, newRoomID)
 
 			} else {
-				topRoom := publicRoomsBasedPriorityQueue.Pop().(*model.Room)
+				topRoom := publicRoomsBasedPriorityQueue.Pop()
 				newRoomID = topRoom.RoomID
 				totalClients := len(topRoom.Group1) + len(topRoom.Group2)
 				//	max 10 clients can be in a room
@@ -189,7 +190,7 @@ func OnMessage(s *melody.Session, msg []byte) {
 func AddAndUpdatePublicRooms(group1, group2 []string, clientID, newRoomID string) *model.Room {
 	grp1, grp2 := utils.InsertClientInRoom(group1, group2, clientID)
 	newRoom := model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
-	publicRoomsBasedPriorityQueue.Push(newRoom)
+	publicRoomsBasedPriorityQueue.Push(&newRoom)
 	// update the mapping for public room
 	publicRoomsMap[newRoomID] = &newRoom
 	return &newRoom

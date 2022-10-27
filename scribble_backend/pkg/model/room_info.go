@@ -23,14 +23,14 @@ func (pq PriorityQueue) Swap(i, j int) {
 	pq[j].index = j
 }
 
-func (pq *PriorityQueue) Push(x any) {
+func (pq *PriorityQueue) Push(x *Room) {
 	n := len(*pq)
-	item := x.(*Room)
+	item := x
 	item.index = n
 	*pq = append(*pq, item)
 }
 
-func (pq *PriorityQueue) Pop() any {
+func (pq *PriorityQueue) Pop() *Room {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
