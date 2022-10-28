@@ -17,12 +17,12 @@ var mrouter = config.GetWebSocketRouter()
 
 // var logger = config.GetLogger()
 var response model.ServerResponse
-var privateRoomsMap map[string]*model.Room
+var privateRoomsMap map[string]*model.Room = make(map[string]*model.Room)
 var publicRoomsBasedPriorityQueue model.PriorityQueue
-var publicRoomsMap map[string]*model.Room
+var publicRoomsMap map[string]*model.Room = make(map[string]*model.Room)
 
 // 1st key is roomID, 2nd key is clientID and value is session
-var totalClientsInSession map[string](map[string]*melody.Session)
+var totalClientsInSession map[string](map[string]*melody.Session) = make(map[string]map[string]*melody.Session)
 
 // TYPES OF REQUEST SENT BY SERVER
 //
@@ -46,7 +46,7 @@ func OnConnect(s *melody.Session) {
 
 	// Set "stores" the key, value pair for this session in the server
 	// we will be adding the name after this request is sent and a response is recieved
-	clientInfo := model.ClientInfo{ClientID: id, X: "0", Y: "0"}
+	clientInfo := model.ClientInfo{ClientID: id, X: "0", Y: "0", Name: ""}
 	s.Set("info", &clientInfo)
 
 	// write send the message to the client to set its id, and the size of the
@@ -86,7 +86,6 @@ func OnDisconnect(s *melody.Session) {
 	}
 	fmt.Printf("size before broadcasting %v\n", len(connectedClients))
 	mrouter.BroadcastOthers([]byte(jsonResponse), s)
-
 }
 
 // TYPES OF REQUEST SENT BY CLIENT
@@ -100,26 +99,48 @@ func OnMessage(s *melody.Session, msg []byte) {
 	var clientResponse *model.ClientResponse
 	err := json.Unmarshal(msg, &clientResponse)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("error decoding sakura response: %v", err)
+		if e, ok := err.(*json.SyntaxError); ok {
+			log.Printf("syntax error at byte offset %d", e.Offset)
+		}
+		log.Printf("sakura response: %q", clientResponse)
+
 	}
 	info := s.MustGet("info").(*model.ClientInfo)
 	clientID := info.ClientID
 	clientName := clientResponse.ClientInfo.Name
 	newClientInfo := model.ClientInfo{ClientID: clientID, Name: clientName}
+	log.Printf("New client info: %v", newClientInfo)
 	if clientResponse.ReponseType == "connect-new" {
+		log.Printf("User wants to connect-new")
 		var newRoomID string
 
 		//	if he wants to create a private room, a new key for room is created
 
 		if clientResponse.RoomType == "private" {
 			newRoomID = utils.GetKey()
-			grp1, grp2 := utils.InsertClientInRoom(privateRoomsMap[newRoomID].Group1, privateRoomsMap[newRoomID].Group2, clientID)
+			grp1, grp2 := utils.InsertClientInRoom([]string{}, []string{}, clientID)
 			privateRoomsMap[newRoomID] = &model.Room{RoomID: newRoomID, Group1: grp1, Group2: grp2}
+			log.Printf("User has been assigned %v and put in privateRoomsMap", newRoomID)
+			jsonResponse, err := json.Marshal(model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: model.ClientInfo{RoomID: newRoomID, ClientID: clientID, X: "0", Y: "0", Name: clientName}})
+			if err != nil {
+				log.Fatal("error parsing json")
+			}
+			s.Write([]byte(jsonResponse))
+			log.Printf("Sent client %v", string(jsonResponse))
+
 		} else {
 			// If there are no public rooms, create a new room and assign client to it
 			if publicRoomsBasedPriorityQueue.Len() == 0 {
 				newRoomID = utils.GetKey()
 				AddAndUpdatePublicRooms([]string{}, []string{}, clientID, newRoomID)
+				log.Printf("User has been assigned %v\nNo rooms in PQ, creating new room..\n", newRoomID)
+				jsonResponse, err := json.Marshal(model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: model.ClientInfo{RoomID: newRoomID, ClientID: clientID, X: "0", Y: "0", Name: clientName}})
+				if err != nil {
+					log.Fatal("error parsing json")
+				}
+				s.Write([]byte(jsonResponse))
+				log.Printf("Sent client %v", string(jsonResponse))
 
 			} else {
 				topRoom := publicRoomsBasedPriorityQueue.Pop()
@@ -130,11 +151,14 @@ func OnMessage(s *melody.Session, msg []byte) {
 				if totalClients == 10 {
 					newRoomID := utils.GetKey()
 					AddAndUpdatePublicRooms([]string{}, []string{}, clientID, newRoomID)
+					log.Printf("User has been assigned %v\nAll rooms has min 10 clients, creating new room..\n", newRoomID)
 
 				} else {
 					// update the groups of the current room which has the lowest no. of clients
 					newRoom := AddAndUpdatePublicRooms(topRoom.Group1, topRoom.Group2, clientID, topRoom.RoomID)
 					BroadcastMessageInRoom(newRoom, newClientInfo)
+					log.Printf("User has been assigned %v\nNo need to create new Room, assigned to already exsiting\n", newRoomID)
+
 				}
 			}
 
@@ -144,10 +168,16 @@ func OnMessage(s *melody.Session, msg []byte) {
 		s.Set("info", &newClientInfo)
 
 		// mapping the clientID with the sessions
+		if totalClientsInSession[newRoomID] == nil {
+			totalClientsInSession[newRoomID] = make(map[string]*melody.Session)
+		}
 		totalClientsInSession[newRoomID][clientID] = s
 	} else {
 		// check if the roomID exists
 		roomID := clientResponse.RoomID
+		log.Printf("User wants to join room: %v\n", roomID)
+		log.Printf("Private rooms: %v\n", privateRoomsMap)
+		fmt.Printf("room: %v - Map: %v\n", roomID, privateRoomsMap[roomID])
 		if _, ok := privateRoomsMap[roomID]; !ok {
 			log.Fatal("given room doesn't exists")
 		}
@@ -161,9 +191,11 @@ func OnMessage(s *melody.Session, msg []byte) {
 		grp1, grp2 := utils.InsertClientInRoom(privateRoomsMap[roomID].Group1, privateRoomsMap[roomID].Group2, clientID)
 		newRoom := model.Room{RoomID: roomID, Group1: grp1, Group2: grp2}
 		privateRoomsMap[roomID] = &newRoom
+		if totalClientsInSession[roomID] == nil {
+			totalClientsInSession[roomID] = make(map[string]*melody.Session)
+		}
 		totalClientsInSession[roomID][clientID] = s
 		BroadcastMessageInRoom(&newRoom, newClientInfo)
-
 	}
 
 	// TODO: Create logic for updating points while drawing on screen
@@ -198,6 +230,7 @@ func AddAndUpdatePublicRooms(group1, group2 []string, clientID, newRoomID string
 	publicRoomsBasedPriorityQueue.Push(&newRoom)
 	// update the mapping for public room
 	publicRoomsMap[newRoomID] = &newRoom
+	log.Printf("Allocated new room: %v\nAdded to PQ\n", newRoom)
 	return &newRoom
 }
 
@@ -215,6 +248,8 @@ func BroadcastMessageInRoom(room *model.Room, clientInfo model.ClientInfo) {
 		session.Write([]byte(jsonReponse))
 	}
 
+	log.Printf("Broadcasted msg in grp %v\n", room.Group1)
+
 	for _, client := range room.Group2 {
 		session := totalClientsInSession[room.RoomID][client]
 		serverResponse := model.ServerResponse{ResponseType: "total", ID: clientID, ConnectedClients: connectedClients, ClientInfo: clientInfo}
@@ -224,6 +259,9 @@ func BroadcastMessageInRoom(room *model.Room, clientInfo model.ClientInfo) {
 		}
 		session.Write([]byte(jsonReponse))
 	}
+
+	log.Printf("Broadcasted msg in grp %v\n", room.Group2)
+
 }
 
 // sends message in a group, can be in same or another

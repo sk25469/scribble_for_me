@@ -5,7 +5,7 @@ type ClientResponse struct {
 	ReponseType string `json:"response_type"`
 
 	// public or private
-	RoomID     string      `json:"room_id"`
-	ClientInfo *ClientInfo `json:"client_info"`
-	RoomType   string      `json:"room_type"`
+	RoomID     string     `json:"room_id"`
+	ClientInfo ClientInfo `json:"client_info"`
+	RoomType   string     `json:"room_type"`
 }
