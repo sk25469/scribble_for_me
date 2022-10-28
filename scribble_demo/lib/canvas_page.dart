@@ -16,7 +16,7 @@ class _CanvasPageState extends State<CanvasPage> {
   String id = "", joined = "";
 
   final channel = WebSocketChannel.connect(
-    Uri.parse("ws://localhost:5000/ws"),
+    Uri.parse("ws://20.219.210.103:5000/ws"),
   );
 
   late Stream<ServerResponse> readableStream;
@@ -79,6 +79,8 @@ class _CanvasPageState extends State<CanvasPage> {
     final width = MediaQuery.of(context).size.width;
     final height = MediaQuery.of(context).size.height;
 
+    // print(channel.toString());
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scribble Demo'),
@@ -104,7 +106,7 @@ class _CanvasPageState extends State<CanvasPage> {
                       stream: readableStream,
                       builder: (context, snapshot) {
                         if (snapshot.hasData) {
-                          print(snapshot.data);
+                          print(snapshot.data.toString());
                           final responseData = snapshot.data;
                           if (responseData!.response_type == "iam") {
                             id = responseData.id;
@@ -142,16 +144,17 @@ class _CanvasPageState extends State<CanvasPage> {
                 child: StreamBuilder<ServerResponse>(
                   stream: readableStream,
                   builder: (context, snapshot) {
+                    print(snapshot.data);
                     if (snapshot.hasError) {
+                      log(snapshot.error.toString());
                       return const Text("An error occured");
                     }
                     if (snapshot.hasData) {
-                      print(snapshot.data);
                       final responseData = snapshot.data;
 
                       if (responseData!.response_type == "set") {
                         return Text(
-                            "CurrentClientID: $id\nID: ${responseData.point_info.id}\ndx: ${responseData.point_info.x}\ndy: ${responseData.point_info.y}");
+                            "CurrentClientID: $id\nID: ${responseData.client_info.client_id}\ndx: ${responseData.client_info.x}\ndy: ${responseData.client_info.y}");
                       }
                     }
 

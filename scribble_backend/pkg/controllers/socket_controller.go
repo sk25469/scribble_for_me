@@ -14,7 +14,9 @@ import (
 
 var connectedClients []string
 var mrouter = config.GetWebSocketRouter()
-var response *model.ServerResponse
+
+// var logger = config.GetLogger()
+var response model.ServerResponse
 var privateRoomsMap map[string]*model.Room
 var publicRoomsBasedPriorityQueue model.PriorityQueue
 var publicRoomsMap map[string]*model.Room
@@ -50,14 +52,17 @@ func OnConnect(s *melody.Session) {
 	// write send the message to the client to set its id, and the size of the
 	// fmt.Printf("after sending client %v\n", connectedClients)
 	connectedClients = append(connectedClients, id)
+	// logger.Info(fmt.Sprintf("Connected clients: %v", connectedClients))
 	// current connected sessions
-	response = &model.ServerResponse{ResponseType: "iam", ID: id, ConnectedClients: connectedClients, ClientInfo: &clientInfo}
+	response = model.ServerResponse{ResponseType: "iam", ID: id, ConnectedClients: connectedClients, ClientInfo: clientInfo}
 	jsonResponse, err := json.Marshal(&response)
 	if err != nil {
 		log.Print("can't marshall reponse")
 	}
 
 	err = s.Write([]byte(jsonResponse))
+	// logger.Infof("Written to the client: %v", jsonResponse)
+	fmt.Printf("Written to the client: %v\n", response)
 
 	if err != nil {
 		log.Fatal(err)
@@ -129,7 +134,7 @@ func OnMessage(s *melody.Session, msg []byte) {
 				} else {
 					// update the groups of the current room which has the lowest no. of clients
 					newRoom := AddAndUpdatePublicRooms(topRoom.Group1, topRoom.Group2, clientID, topRoom.RoomID)
-					BroadcastMessageInRoom(newRoom, &newClientInfo)
+					BroadcastMessageInRoom(newRoom, newClientInfo)
 				}
 			}
 
@@ -157,7 +162,7 @@ func OnMessage(s *melody.Session, msg []byte) {
 		newRoom := model.Room{RoomID: roomID, Group1: grp1, Group2: grp2}
 		privateRoomsMap[roomID] = &newRoom
 		totalClientsInSession[roomID][clientID] = s
-		BroadcastMessageInRoom(&newRoom, &newClientInfo)
+		BroadcastMessageInRoom(&newRoom, newClientInfo)
 
 	}
 
@@ -197,7 +202,7 @@ func AddAndUpdatePublicRooms(group1, group2 []string, clientID, newRoomID string
 }
 
 // broadcast message in a room
-func BroadcastMessageInRoom(room *model.Room, clientInfo *model.ClientInfo) {
+func BroadcastMessageInRoom(room *model.Room, clientInfo model.ClientInfo) {
 	// broadcast in group1
 	clientID := clientInfo.ClientID
 	for _, client := range room.Group1 {
@@ -222,7 +227,7 @@ func BroadcastMessageInRoom(room *model.Room, clientInfo *model.ClientInfo) {
 }
 
 // sends message in a group, can be in same or another
-func SendMessageInGroup(grp []string, clientInfo *model.ClientInfo) {
+func SendMessageInGroup(grp []string, clientInfo model.ClientInfo) {
 	roomID := clientInfo.RoomID
 	clientID := clientInfo.ClientID
 	for i := 0; i < len(grp); i++ {
