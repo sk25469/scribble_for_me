@@ -18,7 +18,7 @@ class _CanvasPageState extends State<CanvasPage> {
   String id = "", joined = "";
 
   final channel = WebSocketChannel.connect(
-    Uri.parse("ws://20.219.45.92:5000/ws"),
+    Uri.parse("ws://localhost:5000/ws"),
   );
 
   late Stream<ServerResponse> readableStream;
@@ -40,8 +40,6 @@ class _CanvasPageState extends State<CanvasPage> {
           client_id: id,
           name: nameTextController.text,
           room_id: "",
-          x: "",
-          y: "",
         ),
         room_type: room_type,
       ).toJson(),
@@ -195,22 +193,18 @@ class _CanvasPageState extends State<CanvasPage> {
                               if (snapshot.hasData) {
                                 print(snapshot.data.toString());
                                 final responseData = snapshot.data;
-                                if (responseData!.response_type == "iam") {
-                                  id = responseData.id;
-                                  joined =
-                                      responseData.connected_clients.length.toString();
+                                if (responseData!.response_type == "total") {
+                                  int total = responseData.room_info.grp1.length +
+                                      responseData.room_info.grp2.length;
+                                  joined = total.toString();
                                   return Text(
-                                      "New user joined: $id\nTotal joined: $joined");
-                                } else if (responseData.response_type == "total") {
-                                  joined =
-                                      responseData.connected_clients.length.toString();
-                                  return Text(
-                                      "New user joined: ${responseData.id}\nTotal joined: $joined");
+                                      "New user joined: ${responseData.client_info.client_id}\nTotal joined: $joined");
                                 } else if (responseData.response_type == "dis") {
-                                  joined =
-                                      responseData.connected_clients.length.toString();
+                                  int total = responseData.room_info.grp1.length +
+                                      responseData.room_info.grp2.length;
+                                  joined = total.toString();
                                   return Text(
-                                      "User disconnected: ${responseData.id}\nTotal joined: $joined");
+                                      "User disconnected: ${responseData.client_info.client_id}\nTotal joined: $joined");
                                 }
                               }
                               return Text("Total joined: $joined");
@@ -245,7 +239,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
                             if (responseData!.response_type == "set") {
                               return Text(
-                                  "CurrentClientID: $id\nID: ${responseData.client_info.client_id}\ndx: ${responseData.client_info.x}\ndy: ${responseData.client_info.y}");
+                                  "CurrentClientID: $id\nID: ${responseData.client_info.client_id}\n");
                             }
                           }
 
